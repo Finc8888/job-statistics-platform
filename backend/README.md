@@ -8,6 +8,8 @@ REST API для управления вакансиями и анализа ст
 - Статистика по самым востребованным навыкам
 - Анализ зарплат по навыкам
 - Статистика по языкам программирования и базам данных
+- DTO-слой для разделения API-контрактов и внутренних моделей
+- Unit-тесты (sqlmock + httptest)
 - Docker-контейнеризация
 - MySQL база данных
 
@@ -49,6 +51,49 @@ docker-compose up -d mysql
 # Запустите API
 go run cmd/api/main.go
 ```
+
+## 🏗️ Архитектура
+
+```
+HTTP Request → Handler → DTO → Model → Repository → MySQL
+HTTP Response ← Handler ← DTO ← Model ← Repository ← MySQL
+```
+
+```
+backend/
+├── cmd/api/main.go              # Точка входа, wiring
+├── internal/
+│   ├── database/db.go           # Подключение к MySQL
+│   ├── dto/                     # Data Transfer Objects
+│   │   ├── job.go               # JobRequest, JobResponse, маппинг
+│   │   └── location.go          # LocationRequest, LocationResponse, маппинг
+│   ├── models/models.go         # Внутренние модели (sql.Null* для nullable колонок)
+│   ├── repository/              # SQL-запросы + интерфейсы для DI
+│   │   ├── interfaces.go
+│   │   ├── job_repository.go
+│   │   ├── company_repository.go
+│   │   ├── skill_repository.go
+│   │   ├── location_repository.go
+│   │   └── stats_repository.go
+│   └── handlers/                # HTTP-хендлеры
+│       ├── job_handler.go
+│       ├── company_handler.go
+│       ├── skill_location_handler.go
+│       └── stats_handler.go
+├── migrations/
+│   ├── 001_create_tables.sql    # Схема (idempotent)
+│   └── 002_seed_data.sql        # Тестовые данные (destructive)
+└── TESTING.md                   # Документация по тестам
+```
+
+### DTO-слой
+
+Пакет `internal/dto/` отвечает за преобразование данных между JSON (API) и внутренними моделями:
+
+- `dto.JobRequest` — входящий JSON → `models.Job` (через `ToModel()`)
+- `dto.JobResponse` — `models.Job` → исходящий JSON (через `JobResponseFromModel()`)
+
+Nullable поля (`sql.NullString`, `sql.NullFloat64`) в моделях представлены как указатели (`*string`, `*float64`) в DTO и сериализуются как значение или `null`.
 
 ## 📚 API Endpoints
 
@@ -132,141 +177,40 @@ GET /api/v1/stats/top-skills?limit=10
 
 #### Зарплаты по навыкам
 ```bash
-GET /api/v1/stats/skill-salaries?min_vacancies=2
+GET /api/v1/stats/skill-salaries?min_vacancies=1
 ```
-Возвращает среднюю зарплату по навыкам (с минимальным количеством вакансий).
 
-#### Навыки по уровню
+#### Навыки по уровням
 ```bash
 GET /api/v1/stats/skills-by-level
 ```
-Возвращает востребованность навыков по уровню (Junior/Middle/Senior).
 
-#### Статистика по компаниям
+#### Статистика компаний
 ```bash
 GET /api/v1/stats/companies
 ```
-Возвращает статистику по компаниям (количество вакансий, зарплаты, локации).
 
-#### Статистика по базам данных
+#### Статистика баз данных
 ```bash
 GET /api/v1/stats/databases
 ```
-Возвращает статистику по базам данных.
 
-#### Статистика по языкам программирования
+#### Статистика языков программирования
 ```bash
 GET /api/v1/stats/languages
 ```
-Возвращает статистику по языкам программирования.
 
-## 🗄️ Структура базы данных
-
-```
-companies
-├── id
-├── name
-├── description
-├── created_at
-└── updated_at
-
-jobs
-├── id
-├── company_id (FK)
-├── title
-├── level
-├── specialization
-├── salary_min
-├── salary_max
-├── salary_currency
-├── experience_years
-├── location
-├── remote_available
-├── description
-├── responsibilities
-├── benefits
-├── posted_date
-├── is_active
-├── source_url
-├── created_at
-└── updated_at
-
-skills
-├── id
-├── name
-├── category
-└── created_at
-
-job_skills
-├── id
-├── job_id (FK)
-├── skill_id (FK)
-├── is_required
-├── is_nice_to_have
-└── created_at
-
-locations
-├── id
-├── job_id (FK)
-├── city
-├── metro_station
-└── is_primary
-```
-
-## 🔧 Переменные окружения
-
-```env
-DB_HOST=mysql
-DB_PORT=3306
-DB_USER=jobuser
-DB_PASSWORD=jobpassword
-DB_NAME=job_stats
-API_PORT=8081
-```
-
-## 📊 Примеры использования
-
-### Получить топ-10 навыков
-```bash
-curl http://localhost:8081/api/v1/stats/top-skills?limit=10
-```
-
-### Получить статистику по компаниям
-```bash
-curl http://localhost:8081/api/v1/stats/companies
-```
-
-### Получить все активные вакансии
-```bash
-curl http://localhost:8081/api/v1/jobs
-```
-
-## 🐳 Docker команды
+## 🧪 Тестирование
 
 ```bash
-# Запустить контейнеры
-docker-compose up -d
+# Все тесты
+go test ./... -v -count=1
 
-# Остановить контейнеры
-docker-compose down
+# С покрытием
+make test-coverage
 
-# Пересобрать образы
-docker-compose build
-
-# Просмотр логов
-docker-compose logs -f
-
-# Выполнить команду в контейнере
-docker-compose exec api sh
-docker-compose exec mysql mysql -u jobuser -p job_stats
+# В Docker
+make test-docker
 ```
 
-## 🧪 Тестирование API
-
-Вы можете использовать Postman, Insomnia или curl для тестирования API.
-
-Примеры curl-запросов находятся выше в разделе API Endpoints.
-
-## 📝 Лицензия
-
-MIT
+Подробнее — см. [TESTING.md](TESTING.md).

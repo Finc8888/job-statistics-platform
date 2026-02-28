@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"job-statistics-api/internal/dto"
 	"job-statistics-api/internal/models"
 )
 
@@ -104,7 +105,7 @@ func TestJobHandler_GetAll(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
 			if tt.wantStatus == http.StatusOK {
-				var jobs []models.Job
+				var jobs []dto.JobResponse
 				if err := json.NewDecoder(rec.Body).Decode(&jobs); err != nil {
 					t.Fatalf("failed to decode response: %v", err)
 				}
@@ -166,7 +167,7 @@ func TestJobHandler_GetByID(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
 			if tt.wantStatus == http.StatusOK && tt.wantTitle != "" {
-				var job models.Job
+				var job dto.JobResponse
 				if err := json.NewDecoder(rec.Body).Decode(&job); err != nil {
 					t.Fatalf("failed to decode response: %v", err)
 				}
@@ -188,7 +189,7 @@ func TestJobHandler_Create(t *testing.T) {
 	}{
 		{
 			name: "create successfully",
-			body: models.Job{
+			body: dto.JobRequest{
 				CompanyID: 1,
 				Title:     "Rust Developer",
 				Level:     "Senior",
@@ -205,7 +206,7 @@ func TestJobHandler_Create(t *testing.T) {
 		},
 		{
 			name:       "db error returns 500",
-			body:       models.Job{Title: "Broken Job"},
+			body:       dto.JobRequest{Title: "Broken Job"},
 			repo:       &mockJobRepo{err: errors.New("db error")},
 			wantStatus: http.StatusInternalServerError,
 		},
@@ -224,13 +225,60 @@ func TestJobHandler_Create(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
 			if tt.wantStatus == http.StatusCreated {
-				var job models.Job
+				var job dto.JobResponse
 				if err := json.NewDecoder(rec.Body).Decode(&job); err != nil {
 					t.Fatalf("failed to decode response: %v", err)
 				}
 				if job.ID != tt.wantID {
 					t.Errorf("ID = %d, want %d", job.ID, tt.wantID)
 				}
+			}
+		})
+	}
+}
+
+func TestJobHandler_Update(t *testing.T) {
+	tests := []struct {
+		name       string
+		url        string
+		body       interface{}
+		repo       *mockJobRepo
+		wantStatus int
+	}{
+		{
+			name:       "update successfully",
+			url:        "/api/v1/jobs/1",
+			body:       dto.JobRequest{Title: "Senior Go Dev", Level: "Senior", CompanyID: 1},
+			repo:       &mockJobRepo{},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "invalid id returns 400",
+			url:        "/api/v1/jobs/abc",
+			body:       dto.JobRequest{},
+			repo:       &mockJobRepo{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "db error returns 500",
+			url:        "/api/v1/jobs/1",
+			body:       dto.JobRequest{Title: "Broken"},
+			repo:       &mockJobRepo{err: errors.New("db error")},
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, _ := json.Marshal(tt.body)
+			req := httptest.NewRequest(http.MethodPut, tt.url, bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			makeJobRouter(tt.repo).ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
 		})
 	}
@@ -266,53 +314,6 @@ func TestJobHandler_Delete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodDelete, tt.url, nil)
-			rec := httptest.NewRecorder()
-
-			makeJobRouter(tt.repo).ServeHTTP(rec, req)
-
-			if rec.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
-			}
-		})
-	}
-}
-
-func TestJobHandler_Update(t *testing.T) {
-	tests := []struct {
-		name       string
-		url        string
-		body       interface{}
-		repo       *mockJobRepo
-		wantStatus int
-	}{
-		{
-			name:       "update successfully",
-			url:        "/api/v1/jobs/1",
-			body:       models.Job{Title: "Senior Go Dev", Level: "Senior", CompanyID: 1},
-			repo:       &mockJobRepo{},
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "invalid id returns 400",
-			url:        "/api/v1/jobs/abc",
-			body:       models.Job{},
-			repo:       &mockJobRepo{},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "db error returns 500",
-			url:        "/api/v1/jobs/1",
-			body:       models.Job{Title: "Broken"},
-			repo:       &mockJobRepo{err: errors.New("db error")},
-			wantStatus: http.StatusInternalServerError,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest(http.MethodPut, tt.url, bytes.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 
 			makeJobRouter(tt.repo).ServeHTTP(rec, req)

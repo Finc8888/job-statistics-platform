@@ -68,13 +68,15 @@ backend/
 ├── cmd/api/              # Главный файл приложения
 ├── internal/
 │   ├── database/         # Подключение к БД
-│   ├── models/           # Модели данных
-│   ├── repository/       # Репозитории (работа с БД)
+│   ├── dto/              # Data Transfer Objects (API ↔ модели)
+│   ├── models/           # Внутренние модели данных (sql.Null*)
+│   ├── repository/       # Репозитории (работа с БД) + интерфейсы
 │   └── handlers/         # HTTP обработчики
-├── scripts/              # SQL скрипты
+├── migrations/           # SQL-миграции + seed data
+├── TESTING.md            # Документация по тестам
 ├── docker-compose.yml    # Docker Compose конфигурация
-├── Dockerfile           # Docker образ
-└── README.md            # Полная документация
+├── Dockerfile            # Docker образ
+└── README.md             # Полная документация
 ```
 
 ## Полезные команды
@@ -115,6 +117,7 @@ docker-compose down -v
 ## Подробнее
 
 - **README.md** - полная документация
+- **TESTING.md** - документация по тестированию
 - **API_EXAMPLES.md** - примеры всех запросов
 
 ## Troubleshooting

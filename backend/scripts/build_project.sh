@@ -8,6 +8,10 @@ mv db.go internal/database/
 # Models
 mv models.go internal/models/
 
+# DTO
+mv job_dto.go internal/dto/job.go
+mv location_dto.go internal/dto/location.go
+
 # Handlers
 mv company_handler.go internal/handlers/
 mv job_handler.go internal/handlers/

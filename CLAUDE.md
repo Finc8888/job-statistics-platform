@@ -67,7 +67,14 @@ yarn preview    # serve dist/ with Caddy on :3000
 
 ```
 Browser → Caddy (:3000) → React SPA
-Browser → Go API (:8081) → Repository → MySQL (:3307 on host)
+Browser → Go API (:8081) → Handler → DTO ↔ Model → Repository → MySQL (:3307 on host)
+```
+
+Data conversion pipeline:
+
+```
+Incoming:  JSON request → dto.JobRequest   → (ToModel())            → models.Job → Repository → MySQL
+Outgoing:  MySQL        → Repository       → models.Job             → (JobResponseFromModel()) → dto.JobResponse → JSON response
 ```
 
 The frontend API base URL is hardcoded in `frontend/src/services/api.ts`:
@@ -77,13 +84,29 @@ const API_BASE_URL = 'http://localhost:8081/api/v1';
 
 ### Backend (`backend/`)
 
-Standard layered Go architecture: **Handler → Repository → MySQL**.
+Layered Go architecture: **Handler → DTO → Repository → MySQL**.
 
 - `cmd/api/main.go` — entry point: wires repositories, handlers, router, starts server
 - `internal/database/db.go` — singleton `*sql.DB`, configured from env vars (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`)
-- `internal/models/` — plain Go structs shared by all layers; nullable DB columns use `sql.NullString`, `sql.NullFloat64`, etc.
+- `internal/models/` — internal domain structs; nullable DB columns use `sql.NullString`, `sql.NullFloat64`, etc. Models with nullable fields have `json:"-"` tags — they are **never serialized directly**; all JSON conversion goes through DTO
+- `internal/dto/` — Data Transfer Objects for API layer. Separate Request/Response structs per entity with mapper functions. Handles conversion between `sql.Null*` types (model) and pointer types `*string`, `*float64` (JSON). This layer is the **only place** where JSON shape is defined for entities with nullable fields
 - `internal/repository/` — one struct per entity wrapping `*sql.DB` with raw SQL; `interfaces.go` defines `JobRepositoryInterface` and `CompanyRepositoryInterface` used by handlers
-- `internal/handlers/` — one struct per entity; accepts repository interfaces (not concrete types), enabling mock-based testing
+- `internal/handlers/` — one struct per entity; accepts repository interfaces (not concrete types), enabling mock-based testing. Handlers decode incoming JSON into `dto.*Request`, call `ToModel()` to get a domain model, pass it to the repository, then convert the result back via `dto.*ResponseFromModel()`
+
+#### DTO conventions
+
+Each entity with nullable fields gets a file in `internal/dto/` containing:
+
+| Type | Purpose | Example |
+|---|---|---|
+| `*Request` | Incoming JSON → model | `dto.JobRequest` — decoded from request body, `ToModel()` returns `models.Job` |
+| `*Response` | Model → outgoing JSON | `dto.JobResponse` — all nullable fields are `*string` / `*float64` (serialize to value or `null`) |
+| `*ResponseFromModel()` | Single model mapper | `dto.JobResponseFromModel(j models.Job) JobResponse` |
+| `*ResponseList()` | Slice mapper | `dto.JobResponseList(jobs []models.Job) []JobResponse` |
+
+Entities without nullable fields (`Company`, `Skill`, `JobSkill`, stats models) still use `json` tags directly on the model struct — no DTO needed until the API shape diverges from the DB shape.
+
+**When to add a new DTO:** if the model uses `sql.Null*` types, or if the API response shape should differ from the internal model (e.g., embedding related data, hiding fields).
 
 **CORS:** `corsMiddleware` wraps the entire `http.Server.Handler` — NOT registered via `r.Use()`. This is intentional: gorilla/mux returns 405 before middleware fires for unmatched methods, so wrapping the handler is the only way to handle OPTIONS preflight correctly.
 
@@ -92,6 +115,8 @@ Standard layered Go architecture: **Handler → Repository → MySQL**.
 ### Testing strategy
 
 Repository tests use `github.com/DATA-DOG/go-sqlmock v1.5.2` to mock `*sql.DB`. Handler tests use `net/http/httptest` with in-package mock structs (`mockJobRepo`, `mockCompanyRepo`) that implement the repository interfaces. No real database is needed to run tests.
+
+Handler tests send `dto.*Request` structs as request bodies and decode responses into `dto.*Response` structs — never into `models.*` directly.
 
 `AddRow` in go-sqlmock v1 requires `[]driver.Value`, not `[]interface{}` — numeric values must be cast to `int64`.
 
@@ -114,3 +139,18 @@ React 18 SPA bundled with esbuild (no Webpack/Vite). State is managed with MobX 
 - `backend/migrations/002_seed_data.sql` — starts with `TRUNCATE` (via `SET FOREIGN_KEY_CHECKS=0`); always destructive
 - `migrate.sh` runs only schema; `seed.sh` runs only seed data
 - Both scripts detect the MySQL container by name (`job_stats_mysql`) using `docker ps`, not `docker-compose ps`, so they work regardless of which compose file started the container
+
+## Future: DDD migration path
+
+The current DTO architecture is designed as a stepping stone toward Domain-Driven Design. Planned evolution:
+
+```
+Current:   Handler → DTO ↔ Model (sql.Null*) → Repository → MySQL
+Future:    Handler → DTO ↔ Domain Entity (pure Go) → Repository (sql.Null*) → MySQL
+```
+
+When migrating to DDD:
+1. Extract pure domain entities (no `sql.Null*`, no `json` tags) into `internal/domain/`
+2. Move `sql.Null*` handling into repository-layer mappers
+3. DTO layer stays unchanged — it already works with clean Go types (`*string`, `*float64`)
+4. Add domain services for business logic that currently lives in handlers

@@ -1,51 +1,22 @@
 # Job Statistics Platform
 
-Платформа для анализа рынка труда IT: CRUD вакансий/компаний/навыков + интерактивные графики статистики.
-
-**Стек:** Go 1.21 · MySQL 8 · React 18 · TypeScript · MobX · Recharts · Docker
-
----
+Платформа для управления вакансиями и анализа статистики рынка труда IT-разработчиков.
 
 ## Быстрый старт
 
-### Первый запуск
-
 ```bash
-make setup   # поднять стек + создать схему + загрузить тестовые данные
+make setup          # Первый запуск: Docker stack + schema + seed data
 ```
 
-### Обычный перезапуск (данные сохраняются)
+## Команды
 
 ```bash
-make down    # остановить (данные в БД остаются)
-make up      # запустить снова — все ваши изменения на месте
-```
-
-> `make down` не удаляет volume с данными MySQL. Данные теряются только при `make clean`.
-
-### Локальная разработка
-
-Требуется: Go 1.21+, Node.js 18+, Yarn 4, Docker (только для MySQL).
-
-```bash
-make dev-local     # запустить MySQL в Docker + инструкция
-make migrate       # создать схему (после запуска MySQL)
-make dev-api       # Терминал 1 — Go API на :8081
-make dev-frontend  # Терминал 2 — Frontend на :3000
-```
-
----
-
-## Все Make-команды
-
-```bash
-make setup         # Первый запуск: стек + схема + тестовые данные
-make up            # Запустить стек (данные сохраняются)
+make up            # Запустить (данные сохраняются)
 make down          # Остановить (данные сохраняются)
-make clean         # ⚠️  Остановить + удалить volumes (все данные удалятся)
+make clean         # Остановить + удалить данные
 
-make migrate       # Создать/обновить схему БД (безопасно, данные не трогает)
-make seed          # ⚠️  Загрузить тестовые данные (очищает таблицы!)
+make migrate       # Применить схему БД
+make seed          # Перезалить тестовые данные (DESTRUCTIVE)
 
 make logs          # Логи всех контейнеров
 make ps            # Статус контейнеров
@@ -77,9 +48,11 @@ job-statistics-platform/
 ├── backend/
 │   ├── cmd/api/main.go          # точка входа
 │   ├── internal/
+│   │   ├── dto/                 # Data Transfer Objects (API ↔ модели)
 │   │   ├── handlers/            # HTTP-хендлеры
 │   │   ├── repository/          # слой данных + интерфейсы
-│   │   └── models/              # типы
+│   │   ├── models/              # внутренние типы (sql.Null*)
+│   │   └── database/            # подключение к БД
 │   ├── migrations/              # SQL-миграции + seed
 │   ├── TESTING.md               # документация по тестам
 │   └── Dockerfile
@@ -87,10 +60,26 @@ job-statistics-platform/
 │   ├── src/
 │   │   ├── pages/               # Dashboard, Companies, Jobs, Skills, Statistics
 │   │   ├── stores/              # MobX
-│   │   └── services/api.ts      # Axios-клиент
+│   │   ├── services/api.ts      # Axios-клиент
+│   │   └── types/               # TypeScript типы
 │   └── Dockerfile
+├── CLAUDE.md                    # Руководство для Claude Code
+├── UPGRADE_PLANS.md             # Планы развития + DDD roadmap
 └── docker-compose.full.yml
 ```
+
+---
+
+## Архитектура backend
+
+```
+HTTP Request → Handler → DTO (JSON ↔ Go) → Model (sql.Null*) → Repository → MySQL
+```
+
+- **DTO** (`internal/dto/`) — разделяет API-контракты и внутренние модели. `*Request` для входящих данных, `*Response` для ответов
+- **Models** (`internal/models/`) — внутренние структуры с `sql.Null*` для nullable колонок. Не сериализуются в JSON напрямую
+- **Repository** — raw SQL, интерфейсы для DI и мок-тестирования
+- **Handlers** — принимают `dto.*Request`, отвечают `dto.*Response`
 
 ---
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"job-statistics-api/internal/dto"
 	"job-statistics-api/internal/models"
 	"job-statistics-api/internal/repository"
 	"net/http"
@@ -124,7 +125,7 @@ func (h *LocationHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(locations)
+	json.NewEncoder(w).Encode(dto.LocationResponseList(locations))
 }
 
 func (h *LocationHandler) GetByJobID(w http.ResponseWriter, r *http.Request) {
@@ -142,16 +143,17 @@ func (h *LocationHandler) GetByJobID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(locations)
+	json.NewEncoder(w).Encode(dto.LocationResponseList(locations))
 }
 
 func (h *LocationHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var location models.Location
-	if err := json.NewDecoder(r.Body).Decode(&location); err != nil {
+	var req dto.LocationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	location := req.ToModel()
 	if err := h.repo.Create(&location); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -159,7 +161,7 @@ func (h *LocationHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(location)
+	json.NewEncoder(w).Encode(dto.LocationResponseFromModel(location))
 }
 
 func (h *LocationHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -170,12 +172,13 @@ func (h *LocationHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var location models.Location
-	if err := json.NewDecoder(r.Body).Decode(&location); err != nil {
+	var req dto.LocationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	location := req.ToModel()
 	location.ID = id
 	if err := h.repo.Update(&location); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -183,7 +186,7 @@ func (h *LocationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(location)
+	json.NewEncoder(w).Encode(dto.LocationResponseFromModel(location))
 }
 
 func (h *LocationHandler) Delete(w http.ResponseWriter, r *http.Request) {

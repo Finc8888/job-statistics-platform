@@ -9,7 +9,7 @@
 | Repository | `internal/repository/*_test.go` | Табличные тесты + `go-sqlmock` (без реальной БД) |
 | Handlers | `internal/handlers/*_handler_test.go` | `net/http/httptest` + mock-репозитории |
 
-**Тестов нет зависимости от реальной базы данных** — используется `go-sqlmock` для имитации SQL-запросов и mock-структуры для handlers.
+**Тесты не зависят от реальной базы данных** — используется `go-sqlmock` для имитации SQL-запросов и mock-структуры для handlers.
 
 ---
 
@@ -18,6 +18,9 @@
 ```
 backend/
 ├── internal/
+│   ├── dto/                               # DTO — маппинг-тесты (рекомендуется добавить)
+│   │   ├── job.go
+│   │   └── location.go
 │   ├── repository/
 │   │   ├── interfaces.go                  # Интерфейсы для DI и тестирования
 │   │   ├── company_repository_test.go     # Тесты CompanyRepository (CRUD)
@@ -110,17 +113,20 @@ docker-compose -f docker-compose.test.yml run --rm backend-test
 3. Вызывает метод репозитория
 4. Проверяет результат и выполнение всех ожиданий (`ExpectationsWereMet`)
 
-### Handler-слой (httptest + mock)
+### Handler-слой (httptest + mock + DTO)
 
 Тесты хендлеров используют:
 - `net/http/httptest` — записывает HTTP-ответы без запуска сервера
 - `mockJobRepo` / `mockCompanyRepo` — структуры, реализующие интерфейсы репозитория
+- `dto.JobRequest` / `dto.JobResponse` — для формирования тел запросов и декодирования ответов
+
+**Важно:** хендлеры принимают `dto.*Request` и возвращают `dto.*Response`. Тесты должны использовать DTO-типы, а не `models.*`, для формирования и декодирования JSON. Модели с nullable-полями (Job, Location) имеют теги `json:"-"` и не сериализуются напрямую.
 
 Каждый тест-кейс:
 1. Создаёт mock-репозиторий с нужным поведением (`err` или тестовые данные)
-2. Формирует HTTP-запрос через `httptest.NewRequest`
+2. Формирует HTTP-запрос через `httptest.NewRequest` с телом из `dto.*Request`
 3. Записывает ответ в `httptest.NewRecorder`
-4. Проверяет HTTP-статус и тело ответа
+4. Декодирует ответ в `dto.*Response` и проверяет HTTP-статус и поля
 
 ---
 
@@ -189,16 +195,58 @@ func TestMyRepository_NewMethod(t *testing.T) {
 
 ```go
 // 1. Добавить метод в mockJobRepo / создать новый mock
-// 2. Написать тест:
-func TestMyHandler_NewEndpoint(t *testing.T) {
-    req := httptest.NewRequest(http.MethodGet, "/api/v1/my-endpoint", nil)
+// 2. Формировать запрос через dto.*Request:
+func TestMyHandler_Create(t *testing.T) {
+    reqBody := dto.JobRequest{
+        CompanyID: 1,
+        Title:     "Go Developer",
+        Level:     "Middle",
+    }
+    body, _ := json.Marshal(reqBody)
+
+    req := httptest.NewRequest(http.MethodPost, "/api/v1/jobs", bytes.NewReader(body))
+    req.Header.Set("Content-Type", "application/json")
     rec := httptest.NewRecorder()
 
-    handler := NewMyHandler(&mockMyRepo{})
-    handler.NewEndpoint(rec, req)
+    makeJobRouter(&mockJobRepo{}).ServeHTTP(rec, req)
 
-    if rec.Code != http.StatusOK {
-        t.Errorf("status = %d, want 200", rec.Code)
+    if rec.Code != http.StatusCreated {
+        t.Errorf("status = %d, want 201", rec.Code)
+    }
+
+    // 3. Декодировать ответ в dto.*Response:
+    var resp dto.JobResponse
+    json.NewDecoder(rec.Body).Decode(&resp)
+
+    if resp.Title != "Go Developer" {
+        t.Errorf("title = %q, want %q", resp.Title, "Go Developer")
+    }
+}
+```
+
+### Тест для DTO-маппера (рекомендуется)
+
+```go
+func TestJobResponseFromModel(t *testing.T) {
+    model := models.Job{
+        ID:    1,
+        Title: "Go Dev",
+        SalaryMin: sql.NullFloat64{Float64: 300000, Valid: true},
+        SalaryMax: sql.NullFloat64{Float64: 500000, Valid: true},
+        SalaryCurrency: "RUB",
+        Specialization: sql.NullString{Valid: false}, // NULL
+    }
+
+    resp := dto.JobResponseFromModel(model)
+
+    if resp.ID != 1 {
+        t.Errorf("ID = %d, want 1", resp.ID)
+    }
+    if resp.SalaryMin == nil || *resp.SalaryMin != 300000 {
+        t.Error("SalaryMin should be 300000")
+    }
+    if resp.Specialization != nil {
+        t.Error("Specialization should be nil for NULL")
     }
 }
 ```
@@ -215,3 +263,6 @@ SQL-запрос в коде не совпадает с ожидаемым в т
 
 **Тест прошёл, но проверка не сработала**
 Убедитесь что вы вызываете `t.Fatal` / `t.Error` а не просто логируете — тест без явного фейла считается прошедшим.
+
+**Ответ декодируется в пустую структуру**
+Если декодируете ответ хендлера в `models.Job` вместо `dto.JobResponse`, все поля будут нулевыми — модели с nullable-полями имеют `json:"-"`. Всегда используйте `dto.*Response` для декодирования ответов хендлеров.
