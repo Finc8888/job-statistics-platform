@@ -1,0 +1,24 @@
+version: '3.8'
+
+# docker-compose.test.yml — запуск unit-тестов в изолированном контейнере
+# Не требует запущенной базы данных: все зависимости заменены sqlmock
+#
+# Использование:
+#   docker-compose -f docker-compose.test.yml run --rm backend-test
+#   make test-docker
+
+services:
+  backend-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: job_stats_test
+    environment:
+      CGO_ENABLED: "0"
+    # Монтируем папку для сохранения отчёта о покрытии на хост-машину
+    volumes:
+      - ./coverage:/tmp/coverage
+    # Переопределяем CMD чтобы сохранить coverage.out на хост
+    command: >
+      sh -c "go test ./... -v -count=1 -coverprofile=/tmp/coverage/coverage.out &&
+             go tool cover -func=/tmp/coverage/coverage.out"

@@ -1,0 +1,15 @@
+# Dockerfile.test — изолированный контейнер для запуска unit-тестов
+# Тесты не требуют базы данных (используется sqlmock)
+FROM golang:1.21-alpine
+
+WORKDIR /app
+
+# Устанавливаем зависимости (кэшируется отдельным слоем)
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Копируем исходный код
+COPY . .
+
+# Запускаем тесты с verbose-выводом и отчётом о покрытии
+CMD ["go", "test", "./...", "-v", "-count=1", "-coverprofile=/tmp/coverage.out"]

@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Скрипт для выполнения миграций и сидеров
+
+set -e
+
+echo "🔧 Запуск миграций для job_stats..."
+
+# Цвета для вывода
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Получаем путь к директории, где находится скрипт
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "Директория скрипта: $SCRIPT_DIR"
+
+# Проверяем, запущен ли MySQL контейнер
+if ! docker-compose ps mysql | grep -q "Up"; then
+    echo -e "${RED}❌ MySQL контейнер не запущен!${NC}"
+    echo "Запустите: docker-compose up -d mysql"
+    exit 1
+fi
+
+echo "Ожидание готовности MySQL..."
+sleep 10
+
+# 1. Создание таблиц
+echo "📋 Шаг 1: Создание таблиц..."
+docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -u jobuser -pjobpassword job_stats < "$SCRIPT_DIR/001_create_tables.sql"
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Таблицы созданы успешно${NC}"
+else
+    echo -e "${RED}❌ Ошибка создания таблиц${NC}"
+    exit 1
+fi
+
+# 2. Заполнение данными
+echo "📊 Шаг 2: Загрузка тестовых данных..."
+docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -u jobuser -pjobpassword job_stats < "$SCRIPT_DIR/002_seed_data.sql"
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Данные загружены успешно${NC}"
+else
+    echo -e "${RED}❌ Ошибка загрузки данных${NC}"
+    exit 1
+fi
+
+# 3. Проверка
+echo ""
+echo "🔍 Проверка созданных данных:"
+echo ""
+echo "Компании:"
+docker-compose exec mysql mysql --default-character-set=utf8mb4 -u jobuser -pjobpassword job_stats -e "SELECT id, name FROM companies;"
+
+echo ""
+echo "Навыки (первые 10):"
+docker-compose exec mysql mysql --default-character-set=utf8mb4 -u jobuser -pjobpassword job_stats -e "SELECT id, name, category FROM skills LIMIT 10;"
+
+echo ""
+echo "Вакансии:"
+docker-compose exec mysql mysql --default-character-set=utf8mb4 -u jobuser -pjobpassword job_stats -e "SELECT id, title, level, company_id FROM jobs;"
+
+echo ""
+echo -e "${GREEN}✅ Миграции выполнены успешно!${NC}"
+echo ""
+echo "Теперь можете запустить API:"
+echo "  docker-compose up -d api"
+echo "  curl http://localhost:8081/api/v1/stats/top-skills?limit=10"

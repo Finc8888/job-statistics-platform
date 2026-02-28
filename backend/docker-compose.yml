@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: job_stats_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: job_stats
+      MYSQL_USER: jobuser
+      MYSQL_PASSWORD: jobpassword
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  api:
+    build: .
+    container_name: job_stats_api
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: jobuser
+      DB_PASSWORD: jobpassword
+      DB_NAME: job_stats
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql_data:

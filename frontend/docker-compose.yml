@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: .
+    container_name: job_stats_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - job_stats_network
+
+networks:
+  job_stats_network:
+    external: true
+    name: backend_default

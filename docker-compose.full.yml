@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: job_stats_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: job_stats
+      MYSQL_USER: jobuser
+      MYSQL_PASSWORD: jobpassword
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - job_stats_network
+
+  # Go API Backend
+  api:
+    build: ./backend
+    container_name: job_stats_api
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: jobuser
+      DB_PASSWORD: jobpassword
+      DB_NAME: job_stats
+      API_PORT: 8081
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - job_stats_network
+
+  # React Frontend
+  frontend:
+    build: ./frontend
+    container_name: job_stats_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - api
+    networks:
+      - job_stats_network
+
+volumes:
+  mysql_data:
+
+networks:
+  job_stats_network:
+    driver: bridge
