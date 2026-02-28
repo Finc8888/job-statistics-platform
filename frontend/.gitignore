@@ -30,10 +30,11 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Environment
+# Environment — exclude all .env files except examples
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # Testing
 coverage/
