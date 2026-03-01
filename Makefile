@@ -1,4 +1,4 @@
-.PHONY: help up down clean setup migrate seed logs logs-api ps test test-coverage test-docker dev-local dev-api dev-frontend
+.PHONY: help up down clean setup migrate seed rebuild rebuild-frontend rebuild-api logs logs-api ps test test-coverage test-docker dev-local dev-api dev-frontend
 
 help: ## Показать справку
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -37,6 +37,21 @@ migrate: ## Применить схему БД (CREATE TABLE IF NOT EXISTS, да
 seed: ## ⚠️  Загрузить тестовые данные (очищает все таблицы!)
 	@echo "Загрузка тестовых данных (все текущие данные будут удалены)..."
 	cd backend/migrations && chmod +x seed.sh && ./seed.sh
+
+rebuild-frontend: ## Пересобрать frontend без кэша (если make up не подхватил изменения)
+	docker-compose -f docker-compose.full.yml build --no-cache frontend
+	docker-compose -f docker-compose.full.yml up -d frontend
+	@echo "✅ Frontend пересобран и перезапущен"
+
+rebuild-api: ## Пересобрать API без кэша (если make up не подхватил изменения)
+	docker-compose -f docker-compose.full.yml build --no-cache api
+	docker-compose -f docker-compose.full.yml up -d api
+	@echo "✅ API пересобран и перезапущен"
+
+rebuild: ## Пересобрать frontend + API без кэша
+	docker-compose -f docker-compose.full.yml build --no-cache frontend api
+	docker-compose -f docker-compose.full.yml up -d frontend api
+	@echo "✅ Стек пересобран и перезапущен"
 
 ps: ## Статус контейнеров
 	docker-compose -f docker-compose.full.yml ps

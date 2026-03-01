@@ -22,16 +22,20 @@ backend/
 │   │   ├── job.go
 │   │   └── location.go
 │   ├── repository/
-│   │   ├── interfaces.go                  # Интерфейсы для DI и тестирования
+│   │   ├── interfaces.go                  # Интерфейсы для DI: Job, Company, JobSkill
 │   │   ├── company_repository_test.go     # Тесты CompanyRepository (CRUD)
-│   │   └── job_repository_test.go         # Тесты JobRepository (CRUD)
+│   │   ├── job_repository_test.go         # Тесты JobRepository (CRUD)
+│   │   └── job_skill_repository_test.go   # Тесты JobSkillRepository (GetSkillsByJobID, SetJobSkills + транзакции)
 │   └── handlers/
 │       ├── company_handler_test.go        # Тесты HTTP-хендлеров компаний
-│       └── job_handler_test.go            # Тесты HTTP-хендлеров вакансий
+│       ├── job_handler_test.go            # Тесты HTTP-хендлеров вакансий
+│       └── job_skill_handler_test.go      # Тесты GET/POST /jobs/{id}/skills
 ├── Dockerfile.test                        # Docker-образ для тестов
 ├── docker-compose.test.yml                # Compose для запуска тестов
 └── coverage/                              # Отчёты покрытия (генерируется)
 ```
+
+**Всего тестов: 49** (38 — CRUD компаний/вакансий, 11 — job_skills)
 
 ---
 

@@ -15,6 +15,14 @@ make down     # Stop containers — data persists (volume is kept)
 make clean    # Stop + delete volumes — all data is lost
 ```
 
+### Rebuild (when `make up` doesn't pick up code changes due to Docker cache)
+
+```bash
+make rebuild-frontend  # Rebuild frontend image --no-cache + restart container
+make rebuild-api       # Rebuild API image --no-cache + restart container
+make rebuild           # Rebuild both frontend + API
+```
+
 ### Database
 
 ```bash
@@ -90,7 +98,7 @@ Layered Go architecture: **Handler → DTO → Repository → MySQL**.
 - `internal/database/db.go` — singleton `*sql.DB`, configured from env vars (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`)
 - `internal/models/` — internal domain structs; nullable DB columns use `sql.NullString`, `sql.NullFloat64`, etc. Models with nullable fields have `json:"-"` tags — they are **never serialized directly**; all JSON conversion goes through DTO
 - `internal/dto/` — Data Transfer Objects for API layer. Separate Request/Response structs per entity with mapper functions. Handles conversion between `sql.Null*` types (model) and pointer types `*string`, `*float64` (JSON). This layer is the **only place** where JSON shape is defined for entities with nullable fields
-- `internal/repository/` — one struct per entity wrapping `*sql.DB` with raw SQL; `interfaces.go` defines `JobRepositoryInterface` and `CompanyRepositoryInterface` used by handlers
+- `internal/repository/` — one struct per entity wrapping `*sql.DB` with raw SQL; `interfaces.go` defines `JobRepositoryInterface`, `CompanyRepositoryInterface`, and `JobSkillRepositoryInterface` used by handlers
 - `internal/handlers/` — one struct per entity; accepts repository interfaces (not concrete types), enabling mock-based testing. Handlers decode incoming JSON into `dto.*Request`, call `ToModel()` to get a domain model, pass it to the repository, then convert the result back via `dto.*ResponseFromModel()`
 
 #### DTO conventions
@@ -111,6 +119,8 @@ Entities without nullable fields (`Company`, `Skill`, `JobSkill`, stats models) 
 **CORS:** `corsMiddleware` wraps the entire `http.Server.Handler` — NOT registered via `r.Use()`. This is intentional: gorilla/mux returns 405 before middleware fires for unmatched methods, so wrapping the handler is the only way to handle OPTIONS preflight correctly.
 
 **StatsHandler** uses `*repository.StatsRepository` directly (no interface) because stats queries are read-only and not tested with mocks.
+
+**Job Skills endpoints** — `GET /api/v1/jobs/{id}/skills` returns `[]models.Skill` for a job; `POST /api/v1/jobs/{id}/skills` accepts `{"skill_ids": [1, 2]}` and atomically replaces all skill associations (DELETE + INSERT in a transaction). Handler uses `JobSkillRepositoryInterface` for testability.
 
 ### Testing strategy
 

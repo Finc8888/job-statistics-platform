@@ -32,6 +32,7 @@ func main() {
 	skillRepo := repository.NewSkillRepository(database.DB)
 	locationRepo := repository.NewLocationRepository(database.DB)
 	statsRepo := repository.NewStatsRepository(database.DB)
+	jobSkillRepo := repository.NewJobSkillRepository(database.DB)
 
 	// Инициализируем обработчики
 	companyHandler := handlers.NewCompanyHandler(companyRepo)
@@ -39,6 +40,7 @@ func main() {
 	skillHandler := handlers.NewSkillHandler(skillRepo)
 	locationHandler := handlers.NewLocationHandler(locationRepo)
 	statsHandler := handlers.NewStatsHandler(statsRepo)
+	jobSkillHandler := handlers.NewJobSkillHandler(jobSkillRepo)
 
 	// Создаем роутер
 	r := mux.NewRouter()
@@ -59,6 +61,10 @@ func main() {
 	api.HandleFunc("/jobs", jobHandler.Create).Methods("POST")
 	api.HandleFunc("/jobs/{id}", jobHandler.Update).Methods("PUT")
 	api.HandleFunc("/jobs/{id}", jobHandler.Delete).Methods("DELETE")
+
+	// Job skills endpoints
+	api.HandleFunc("/jobs/{id}/skills", jobSkillHandler.GetByJobID).Methods("GET")
+	api.HandleFunc("/jobs/{id}/skills", jobSkillHandler.SetJobSkills).Methods("POST")
 
 	// Skills endpoints
 	api.HandleFunc("/skills", skillHandler.GetAll).Methods("GET")

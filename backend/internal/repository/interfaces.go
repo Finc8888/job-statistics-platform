@@ -20,3 +20,9 @@ type CompanyRepositoryInterface interface {
 	Update(c *models.Company) error
 	Delete(id int) error
 }
+
+// JobSkillRepositoryInterface определяет контракт для работы с навыками вакансии.
+type JobSkillRepositoryInterface interface {
+	GetSkillsByJobID(jobID int) ([]models.Skill, error)
+	SetJobSkills(jobID int, skillIDs []int) error
+}

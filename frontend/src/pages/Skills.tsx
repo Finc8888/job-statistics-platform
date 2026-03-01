@@ -11,12 +11,20 @@ export const Skills = observer(() => {
     category: 'Язык программирования',
   });
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterJobId, setFilterJobId] = useState<number | 'all'>('all');
 
   useEffect(() => {
     rootStore.fetchSkills();
+    rootStore.fetchJobs();
   }, []);
 
-  const { skills, loading, error } = rootStore;
+  useEffect(() => {
+    if (filterJobId !== 'all') {
+      rootStore.fetchJobSkills(filterJobId as number);
+    }
+  }, [filterJobId]);
+
+  const { skills, jobs, jobSkills, loading, error } = rootStore;
 
   const categories = [
     'Язык программирования',
@@ -26,9 +34,14 @@ export const Skills = observer(() => {
     'Другое',
   ];
 
-  const filteredSkills = filterCategory === 'all'
-    ? skills
-    : skills.filter((s) => s.category === filterCategory);
+  // When a job filter is active, limit to skills of that job
+  const jobFilteredSkills =
+    filterJobId === 'all' ? skills : jobSkills[filterJobId as number] || [];
+
+  const filteredSkills =
+    filterCategory === 'all'
+      ? jobFilteredSkills
+      : jobFilteredSkills.filter((s) => s.category === filterCategory);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,14 +100,38 @@ export const Skills = observer(() => {
 
       {error && <div className="error-message">{error}</div>}
 
-      {/* Filter */}
+      {/* Filters */}
       <div className="card" style={{ marginBottom: '24px' }}>
+        {/* Filter by job */}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+            Фильтр по вакансии
+          </label>
+          <select
+            className="form-select"
+            style={{ maxWidth: '320px' }}
+            value={filterJobId}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFilterJobId(val === 'all' ? 'all' : Number(val));
+            }}
+          >
+            <option value="all">Все вакансии</option>
+            {jobs.map((job) => (
+              <option key={job.id} value={job.id}>
+                {job.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Filter by category */}
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <button
             className={`btn ${filterCategory === 'all' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setFilterCategory('all')}
           >
-            Все ({skills.length})
+            Все ({jobFilteredSkills.length})
           </button>
           {categories.map((cat) => (
             <button
@@ -102,7 +139,7 @@ export const Skills = observer(() => {
               className={`btn ${filterCategory === cat ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setFilterCategory(cat)}
             >
-              {cat} ({skills.filter((s) => s.category === cat).length})
+              {cat} ({jobFilteredSkills.filter((s) => s.category === cat).length})
             </button>
           ))}
         </div>
@@ -205,7 +242,9 @@ export const Skills = observer(() => {
         </table>
         {filteredSkills.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-            Навыков в этой категории пока нет
+            {filterJobId !== 'all'
+              ? 'У этой вакансии нет привязанных навыков'
+              : 'Навыков в этой категории пока нет'}
           </div>
         )}
       </div>

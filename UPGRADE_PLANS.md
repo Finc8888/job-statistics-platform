@@ -6,12 +6,13 @@
 
 ### Что уже сделано
 
-- ✅ Repository-паттерн с интерфейсами (`JobRepositoryInterface`, `CompanyRepositoryInterface`)
+- ✅ Repository-паттерн с интерфейсами (`JobRepositoryInterface`, `CompanyRepositoryInterface`, `JobSkillRepositoryInterface`)
 - ✅ DTO-слой (`internal/dto/`) — разделение API-контрактов и внутренних моделей, маппинг `sql.Null*` ↔ `*string`/`*float64`
-- ✅ Backend unit-тесты (repository через `sqlmock`, handlers через `httptest` + mock-репозитории)
-- ✅ Docker: full-stack compose, backend-only compose, test compose
+- ✅ Backend unit-тесты (49 тестов: repository через `sqlmock`, handlers через `httptest` + mock-репозитории)
+- ✅ Docker: full-stack compose, backend-only compose, test compose; `make rebuild[-frontend|-api]` для форс-пересборки без кэша
 - ✅ Локальная разработка (`make dev-local`, `make dev-api`, `make dev-frontend`)
 - ✅ Миграции разделены на schema (`migrate.sh`) и seed (`seed.sh`)
+- ✅ Навыки вакансии: `GET/POST /api/v1/jobs/{id}/skills`, мультиселект в форме, специализация из списка навыков, фильтр по вакансии в разделе Навыки
 
 ---
 
@@ -231,8 +232,9 @@ func (s *JobService) Create(j *domain.Job) error {
 ---
 
 ## 9. Функциональность
+- ✅ **Специализация** — dropdown из списка навыков (не free text)
+- ✅ **Мультиселект навыков** — при создании/редактировании вакансии
 - ⬜ **Добавить поле 'Ссылка на вакансию'**
-- ⬜ **Добавить все поля при создании вакансии как Enum в Selectbox**
 - ⬜ **Парсинг вакансий** — добавить парсер (hh.ru API, Habr Career) для автоматического сбора данных
 - ⬜ **Экспорт данных** — CSV/Excel выгрузка статистики
 - ⬜ **Фильтры на дашборде** — фильтрация по периоду, региону, уровню

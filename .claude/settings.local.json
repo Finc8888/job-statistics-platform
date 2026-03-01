@@ -6,7 +6,14 @@
       "Bash(du:*)",
       "Bash(go test:*)",
       "Bash(go build:*)",
-      "Bash(chmod +x:*)"
+      "Bash(chmod +x:*)",
+      "Bash(yarn build:*)",
+      "Bash(corepack enable:*)",
+      "Bash(YARN_IGNORE_NODE=1 yarn build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(make test:*)",
+      "Bash(docker-compose:*)",
+      "Bash(curl:*)"
     ]
   }
 }

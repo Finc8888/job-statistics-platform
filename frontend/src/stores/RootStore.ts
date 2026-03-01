@@ -2,6 +2,7 @@ import { makeAutoObservable, runInAction } from 'mobx';
 import {
   companiesApi,
   jobsApi,
+  jobSkillsApi,
   skillsApi,
   locationsApi,
   statsApi,
@@ -28,6 +29,7 @@ class RootStore {
   jobs: Job[] = [];
   skills: Skill[] = [];
   locations: Location[] = [];
+  jobSkills: Record<number, Skill[]> = {};
 
   // Statistics
   topSkills: TopSkill[] = [];
@@ -225,6 +227,44 @@ class RootStore {
       });
     } catch (error) {
       this.error = 'Ошибка удаления навыка';
+      throw error;
+    }
+  }
+
+  // Job Skills
+  async fetchJobSkills(jobId: number) {
+    try {
+      const response = await jobSkillsApi.getByJobId(jobId);
+      runInAction(() => {
+        this.jobSkills[jobId] = response.data;
+      });
+    } catch {
+      // silent fail — skills are non-critical
+    }
+  }
+
+  async fetchAllJobSkills() {
+    if (this.jobs.length === 0) return;
+    const results = await Promise.all(
+      this.jobs.map((job) =>
+        jobSkillsApi.getByJobId(job.id).then((r) => ({ jobId: job.id, skills: r.data }))
+      )
+    );
+    runInAction(() => {
+      results.forEach(({ jobId, skills }) => {
+        this.jobSkills[jobId] = skills;
+      });
+    });
+  }
+
+  async setJobSkills(jobId: number, skillIds: number[]) {
+    try {
+      const response = await jobSkillsApi.setForJob(jobId, skillIds);
+      runInAction(() => {
+        this.jobSkills[jobId] = response.data;
+      });
+    } catch (error) {
+      this.error = 'Ошибка сохранения навыков';
       throw error;
     }
   }

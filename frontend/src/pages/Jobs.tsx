@@ -6,6 +6,7 @@ import type { JobForm } from '../types';
 export const Jobs = observer(() => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<number[]>([]);
   const [formData, setFormData] = useState<JobForm>({
     company_id: 0,
     title: '',
@@ -24,19 +25,26 @@ export const Jobs = observer(() => {
   });
 
   useEffect(() => {
-    rootStore.fetchJobs();
+    const loadJobs = async () => {
+      await rootStore.fetchJobs();
+      rootStore.fetchAllJobSkills();
+    };
+    loadJobs();
     rootStore.fetchCompanies();
+    rootStore.fetchSkills();
   }, []);
 
-  const { jobs, companies, loading, error } = rootStore;
+  const { jobs, companies, skills, loading, error } = rootStore;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (editingId) {
         await rootStore.updateJob(editingId, formData);
+        await rootStore.setJobSkills(editingId, selectedSkillIds);
       } else {
-        await rootStore.createJob(formData);
+        const job = await rootStore.createJob(formData);
+        await rootStore.setJobSkills(job.id, selectedSkillIds);
       }
       resetForm();
     } catch (err) {
@@ -61,11 +69,12 @@ export const Jobs = observer(() => {
       benefits: '',
       is_active: true,
     });
+    setSelectedSkillIds([]);
     setShowForm(false);
     setEditingId(null);
   };
 
-  const handleEdit = (id: number) => {
+  const handleEdit = async (id: number) => {
     const job = jobs.find((j) => j.id === id);
     if (job) {
       setFormData({
@@ -86,6 +95,9 @@ export const Jobs = observer(() => {
       });
       setEditingId(id);
       setShowForm(true);
+      await rootStore.fetchJobSkills(id);
+      const jobSkills = rootStore.jobSkills[id] || [];
+      setSelectedSkillIds(jobSkills.map((s) => s.id));
     }
   };
 
@@ -95,9 +107,22 @@ export const Jobs = observer(() => {
     }
   };
 
+  const toggleSkill = (skillId: number) => {
+    setSelectedSkillIds((prev) =>
+      prev.includes(skillId) ? prev.filter((id) => id !== skillId) : [...prev, skillId]
+    );
+  };
+
   const getCompanyName = (companyId: number) => {
     return companies.find((c) => c.id === companyId)?.name || 'Неизвестно';
   };
+
+  // Group skills by category for the checkbox list
+  const skillsByCategory = skills.reduce<Record<string, typeof skills>>((acc, skill) => {
+    if (!acc[skill.category]) acc[skill.category] = [];
+    acc[skill.category].push(skill);
+    return acc;
+  }, {});
 
   if (loading.jobs || loading.companies) {
     return <div className="loading-spinner">⏳ Загрузка...</div>;
@@ -164,12 +189,18 @@ export const Jobs = observer(() => {
               </div>
               <div className="form-group">
                 <label className="form-label">Специализация</label>
-                <input
-                  className="form-input"
-                  type="text"
+                <select
+                  className="form-select"
                   value={formData.specialization}
                   onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
-                />
+                >
+                  <option value="">— Не указано —</option>
+                  {skills.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Минимальная зарплата</label>
@@ -231,6 +262,7 @@ export const Jobs = observer(() => {
                 </label>
               </div>
             </div>
+
             <div className="form-group">
               <label className="form-label">Описание</label>
               <textarea
@@ -239,6 +271,72 @@ export const Jobs = observer(() => {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
             </div>
+
+            {/* Skills multi-select */}
+            <div className="form-group">
+              <label className="form-label">
+                Навыки{selectedSkillIds.length > 0 && (
+                  <span style={{ marginLeft: '8px', color: '#6b7280', fontWeight: '400' }}>
+                    выбрано: {selectedSkillIds.length}
+                  </span>
+                )}
+              </label>
+              {skills.length === 0 ? (
+                <div style={{ color: '#6b7280', fontSize: '14px' }}>Нет доступных навыков</div>
+              ) : (
+                <div
+                  style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                  }}
+                >
+                  {Object.entries(skillsByCategory).map(([category, catSkills]) => (
+                    <div key={category}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '6px', textTransform: 'uppercase' }}>
+                        {category}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {catSkills.map((skill) => {
+                          const checked = selectedSkillIds.includes(skill.id);
+                          return (
+                            <label
+                              key={skill.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                cursor: 'pointer',
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                border: `1px solid ${checked ? '#4f46e5' : '#e5e7eb'}`,
+                                background: checked ? '#eef2ff' : '#fff',
+                                fontSize: '13px',
+                                userSelect: 'none',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleSkill(skill.id)}
+                                style={{ margin: 0 }}
+                              />
+                              {skill.name}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div style={{ display: 'flex', gap: '12px' }}>
               <button type="submit" className="btn btn-primary">
                 {editingId ? '💾 Сохранить' : '➕ Создать'}
@@ -260,53 +358,70 @@ export const Jobs = observer(() => {
               <th>Компания</th>
               <th>Уровень</th>
               <th>Зарплата</th>
+              <th>Навыки</th>
               <th>Удаленка</th>
               <th>Статус</th>
               <th>Действия</th>
             </tr>
           </thead>
           <tbody>
-            {jobs.map((job) => (
-              <tr key={job.id}>
-                <td>{job.id}</td>
-                <td style={{ fontWeight: '600' }}>{job.title}</td>
-                <td>{getCompanyName(job.company_id)}</td>
-                <td>
-                  <span className="badge badge-primary">{job.level}</span>
-                </td>
-                <td>
-                  {job.salary_min && job.salary_max
-                    ? `${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()} ${job.salary_currency}`
-                    : job.salary_min
-                    ? `от ${job.salary_min.toLocaleString()} ${job.salary_currency}`
-                    : '—'}
-                </td>
-                <td>{job.remote_available ? '✅' : '❌'}</td>
-                <td>
-                  <span className={`badge ${job.is_active ? 'badge-success' : 'badge-warning'}`}>
-                    {job.is_active ? 'Активна' : 'Неактивна'}
-                  </span>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleEdit(job.id)}
-                      style={{ padding: '6px 12px', fontSize: '12px' }}
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      className="btn btn-danger"
-                      onClick={() => handleDelete(job.id)}
-                      style={{ padding: '6px 12px', fontSize: '12px' }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {jobs.map((job) => {
+              const jobSkills = rootStore.jobSkills[job.id] || [];
+              return (
+                <tr key={job.id}>
+                  <td>{job.id}</td>
+                  <td style={{ fontWeight: '600' }}>{job.title}</td>
+                  <td>{getCompanyName(job.company_id)}</td>
+                  <td>
+                    <span className="badge badge-primary">{job.level}</span>
+                  </td>
+                  <td>
+                    {job.salary_min && job.salary_max
+                      ? `${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()} ${job.salary_currency}`
+                      : job.salary_min
+                      ? `от ${job.salary_min.toLocaleString()} ${job.salary_currency}`
+                      : '—'}
+                  </td>
+                  <td>
+                    {jobSkills.length > 0 ? (
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', maxWidth: '220px' }}>
+                        {jobSkills.map((s) => (
+                          <span key={s.id} className="badge badge-primary" style={{ fontSize: '11px' }}>
+                            {s.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ color: '#9ca3af' }}>—</span>
+                    )}
+                  </td>
+                  <td>{job.remote_available ? '✅' : '❌'}</td>
+                  <td>
+                    <span className={`badge ${job.is_active ? 'badge-success' : 'badge-warning'}`}>
+                      {job.is_active ? 'Активна' : 'Неактивна'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => handleEdit(job.id)}
+                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => handleDelete(job.id)}
+                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {jobs.length === 0 && (

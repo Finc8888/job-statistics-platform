@@ -52,6 +52,13 @@ export const skillsApi = {
   delete: (id: number) => api.delete(`/skills/${id}`),
 };
 
+// Job Skills API
+export const jobSkillsApi = {
+  getByJobId: (jobId: number) => api.get<Skill[]>(`/jobs/${jobId}/skills`),
+  setForJob: (jobId: number, skillIds: number[]) =>
+    api.post<Skill[]>(`/jobs/${jobId}/skills`, { skill_ids: skillIds }),
+};
+
 // Locations API
 export const locationsApi = {
   getAll: () => api.get<Location[]>('/locations'),
