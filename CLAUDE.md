@@ -15,13 +15,21 @@ make down     # Stop containers — data persists (volume is kept)
 make clean    # Stop + delete volumes — all data is lost
 ```
 
-### Rebuild (when `make up` doesn't pick up code changes due to Docker cache)
+### Rebuild (after code changes)
+
+**IMPORTANT:** `make up` uses Docker cache and may NOT pick up code changes. After modifying source files, always use `make rebuild` to force a clean build:
 
 ```bash
-make rebuild-frontend  # Rebuild frontend image --no-cache + restart container
-make rebuild-api       # Rebuild API image --no-cache + restart container
-make rebuild           # Rebuild both frontend + API
+make rebuild            # Rebuild frontend + API without cache, restart containers
+make rebuild-frontend   # Rebuild only frontend (after changing frontend/src/)
+make rebuild-api        # Rebuild only API (after changing backend/)
 ```
+
+**When to use what:**
+- `make up` — starting stopped containers, no code changes
+- `make rebuild` — after ANY code change (frontend or backend)
+- `make rebuild-frontend` — after frontend-only changes
+- `make rebuild-api` — after backend-only changes
 
 ### Database
 
@@ -51,22 +59,21 @@ make test-coverage          # generates backend/coverage.html
 make test-docker            # run tests inside an isolated Docker container
 ```
 
-### Local development (without frontend/backend Docker containers)
+### Monitoring
+
+```bash
+make ps       # Container status
+make logs     # All container logs (follow)
+make logs-api # API logs only
+```
+
+### Local development (optional — without Docker for frontend/backend)
 
 ```bash
 make dev-local      # starts MySQL in Docker, prints instructions
 make migrate        # apply schema after MySQL is ready
 make dev-api        # run Go API locally on :8081
 make dev-frontend   # build + serve frontend locally on :3000 (Caddy)
-```
-
-### Frontend (from frontend/)
-
-```bash
-yarn install
-yarn dev        # watch mode — rebuilds on change, does NOT serve
-yarn build      # one-time production build to dist/
-yarn preview    # serve dist/ with Caddy on :3000
 ```
 
 ## Architecture
@@ -98,7 +105,7 @@ Layered Go architecture: **Handler → DTO → Repository → MySQL**.
 - `internal/database/db.go` — singleton `*sql.DB`, configured from env vars (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`)
 - `internal/models/` — internal domain structs; nullable DB columns use `sql.NullString`, `sql.NullFloat64`, etc. Models with nullable fields have `json:"-"` tags — they are **never serialized directly**; all JSON conversion goes through DTO
 - `internal/dto/` — Data Transfer Objects for API layer. Separate Request/Response structs per entity with mapper functions. Handles conversion between `sql.Null*` types (model) and pointer types `*string`, `*float64` (JSON). This layer is the **only place** where JSON shape is defined for entities with nullable fields
-- `internal/repository/` — one struct per entity wrapping `*sql.DB` with raw SQL; `interfaces.go` defines `JobRepositoryInterface`, `CompanyRepositoryInterface`, and `JobSkillRepositoryInterface` used by handlers
+- `internal/repository/` — one struct per entity wrapping `*sql.DB` with raw SQL; `interfaces.go` defines `JobRepositoryInterface`, `CompanyRepositoryInterface`, `JobSkillRepositoryInterface` used by handlers
 - `internal/handlers/` — one struct per entity; accepts repository interfaces (not concrete types), enabling mock-based testing. Handlers decode incoming JSON into `dto.*Request`, call `ToModel()` to get a domain model, pass it to the repository, then convert the result back via `dto.*ResponseFromModel()`
 
 #### DTO conventions
@@ -120,8 +127,6 @@ Entities without nullable fields (`Company`, `Skill`, `JobSkill`, stats models) 
 
 **StatsHandler** uses `*repository.StatsRepository` directly (no interface) because stats queries are read-only and not tested with mocks.
 
-**Job Skills endpoints** — `GET /api/v1/jobs/{id}/skills` returns `[]models.Skill` for a job; `POST /api/v1/jobs/{id}/skills` accepts `{"skill_ids": [1, 2]}` and atomically replaces all skill associations (DELETE + INSERT in a transaction). Handler uses `JobSkillRepositoryInterface` for testability.
-
 ### Testing strategy
 
 Repository tests use `github.com/DATA-DOG/go-sqlmock v1.5.2` to mock `*sql.DB`. Handler tests use `net/http/httptest` with in-package mock structs (`mockJobRepo`, `mockCompanyRepo`) that implement the repository interfaces. No real database is needed to run tests.
@@ -134,7 +139,7 @@ Handler tests send `dto.*Request` structs as request bodies and decode responses
 
 React 18 SPA bundled with esbuild (no Webpack/Vite). State is managed with MobX in `src/stores/RootStore.ts`. Charts use Recharts. Routing uses React Router v6.
 
-`yarn dev` only watches and rebuilds — a separate server (`yarn preview` / Caddy) is always needed to serve the files. The Caddyfile serves `dist/` as a SPA with `try_files {path} /index.html`.
+**Build pipeline:** esbuild compiles `src/` → `dist/bundle.js`. Caddy serves `dist/` as a SPA with `try_files {path} /index.html`. The Docker image runs a multi-stage build (node → caddy). Code changes require `make rebuild-frontend` to take effect.
 
 ### Docker
 
@@ -142,6 +147,8 @@ React 18 SPA bundled with esbuild (no Webpack/Vite). State is managed with MobX 
 - `backend/docker-compose.yml` — backend-only (MySQL + API)
 - `backend/docker-compose.test.yml` — isolated test runner; mounts `backend/coverage/` for the coverage report
 - MySQL data is stored in the named volume `mysql_data`; `make down` preserves it, `make clean` removes it
+
+**Docker cache caveat:** `make up` runs `docker-compose up -d --build`, but Docker may cache layers if source files haven't changed in a way that invalidates the COPY layer. Use `make rebuild` (which uses `--no-cache`) when `make up` doesn't pick up changes.
 
 ### Migrations
 

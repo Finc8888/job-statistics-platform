@@ -10,23 +10,42 @@ make setup          # Первый запуск: Docker stack + schema + seed da
 
 ## Команды
 
+### Основные
+
 ```bash
 make up            # Запустить (данные сохраняются)
 make down          # Остановить (данные сохраняются)
 make clean         # Остановить + удалить данные
+```
 
+### Пересборка после изменения кода
+
+> **`make up` может не подхватить изменения из-за Docker кэша.**
+> После любых правок в коде используйте `make rebuild`:
+
+```bash
+make rebuild            # Пересобрать frontend + API без кэша
+make rebuild-frontend   # Только frontend (после правок в frontend/src/)
+make rebuild-api        # Только API (после правок в backend/)
+```
+
+### База данных
+
+```bash
 make migrate       # Применить схему БД
 make seed          # Перезалить тестовые данные (DESTRUCTIVE)
+```
 
-make logs          # Логи всех контейнеров
-make ps            # Статус контейнеров
+### Тесты и мониторинг
 
-make dev-api       # Локально: запустить Go API
-make dev-frontend  # Локально: собрать и запустить Frontend
-
+```bash
 make test          # Unit-тесты backend (без БД)
 make test-coverage # Тесты + HTML-отчёт покрытия
 make test-docker   # Тесты в Docker-контейнере
+
+make ps            # Статус контейнеров
+make logs          # Логи всех контейнеров
+make logs-api      # Логи только API
 ```
 
 ---
@@ -93,6 +112,7 @@ Base URL: `http://localhost:8081/api/v1`
 | GET/PUT/DELETE | `/companies/:id` | получить / обновить / удалить |
 | GET/POST | `/jobs` | вакансии |
 | GET/PUT/DELETE | `/jobs/:id` | — |
+| GET/POST | `/jobs/:id/skills` | навыки вакансии / привязать навыки |
 | GET/POST | `/skills` | навыки |
 | GET | `/stats/top-skills?limit=10` | топ навыков |
 | GET | `/stats/skill-salaries` | зарплаты по навыкам |
@@ -104,9 +124,14 @@ Base URL: `http://localhost:8081/api/v1`
 
 ## Troubleshooting
 
+**Изменения в коде не применяются:**
+```bash
+make rebuild          # пересборка без Docker-кэша
+```
+
 **БД не инициализировалась:**
 ```bash
-make clean && make up
+make clean && make setup
 ```
 
 **Порт занят:**
@@ -116,5 +141,5 @@ lsof -i :3000   # или :8081, :3307
 
 **Пересобрать образы:**
 ```bash
-docker-compose -f docker-compose.full.yml up -d --build
+make rebuild
 ```
