@@ -53,7 +53,7 @@ func (r *StatsRepository) GetSkillSalaries(minVacancies int) ([]models.SkillSala
 	query := `
 		SELECT
 			s.name,
-			AVG((j.salary_min + j.salary_max) / 2) as avg_salary,
+			COALESCE(AVG((j.salary_min + COALESCE(j.salary_max, j.salary_min)) / 2), 0) as avg_salary,
 			COUNT(*) as vacancy_count
 		FROM skills s
 		JOIN job_skills js ON s.id = js.skill_id
@@ -121,8 +121,8 @@ func (r *StatsRepository) GetCompanyStats() ([]models.CompanyStats, error) {
 			c.name as company,
 			COUNT(j.id) as vacancies_count,
 			GROUP_CONCAT(DISTINCT j.level ORDER BY j.level SEPARATOR ', ') as levels,
-			MIN(j.salary_min) as min_salary,
-			MAX(COALESCE(j.salary_max, j.salary_min)) as max_salary,
+			COALESCE(MIN(j.salary_min), 0) as min_salary,
+			COALESCE(MAX(COALESCE(j.salary_max, j.salary_min)), 0) as max_salary,
 			COUNT(DISTINCT l.city) as locations_count,
 			SUM(CASE WHEN j.remote_available THEN 1 ELSE 0 END) as remote_vacancies
 		FROM companies c
@@ -159,7 +159,7 @@ func (r *StatsRepository) GetDatabaseStats() ([]models.DatabaseStats, error) {
 			SUM(CASE WHEN js.is_required THEN 1 ELSE 0 END) as required,
 			SUM(CASE WHEN js.is_nice_to_have THEN 1 ELSE 0 END) as nice_to_have,
 			GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ', ') as companies,
-			AVG((j.salary_min + COALESCE(j.salary_max, j.salary_min)) / 2) as avg_salary
+			COALESCE(AVG((j.salary_min + COALESCE(j.salary_max, j.salary_min)) / 2), 0) as avg_salary
 		FROM skills s
 		JOIN job_skills js ON s.id = js.skill_id
 		JOIN jobs j ON js.job_id = j.id
@@ -195,7 +195,7 @@ func (r *StatsRepository) GetLanguageStats() ([]models.LanguageStats, error) {
 			COUNT(DISTINCT j.id) as vacancy_count,
 			GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ', ') as companies,
 			GROUP_CONCAT(DISTINCT j.level ORDER BY j.level SEPARATOR ', ') as levels,
-			ROUND(AVG((j.salary_min + COALESCE(j.salary_max, j.salary_min)) / 2), 0) as avg_salary_rub
+			COALESCE(ROUND(AVG((j.salary_min + COALESCE(j.salary_max, j.salary_min)) / 2), 0), 0) as avg_salary_rub
 		FROM skills s
 		JOIN job_skills js ON s.id = js.skill_id
 		JOIN jobs j ON js.job_id = j.id
