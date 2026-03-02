@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Conventions
+
+- **Git commit messages must be in English** — always write commit messages in English, regardless of the language used in comments or documentation.
+
 ## Commands
 
 All commands run from the **project root** via the root `Makefile`.

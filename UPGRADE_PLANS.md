@@ -185,7 +185,7 @@ func (s *JobService) Create(j *domain.Job) error {
 
 ## 4. CI/CD
 
-- ⬜ Проект не является git-репозиторием — начать с `git init`
+- ✅ Проект инициализирован как git-репозиторий
 - ⬜ Добавить GitHub Actions / GitLab CI:
   - Линтинг (`go vet`, `golangci-lint`, `eslint`)
   - Запуск тестов
@@ -246,7 +246,7 @@ func (s *JobService) Create(j *domain.Job) error {
 
 | Приоритет | Задача | Зависимости |
 |---|---|---|
-| 1 | `git init` + CI/CD pipeline | — |
+| 1 | ✅ `git init` (выполнено) | — |
 | 2 | DTO mapper тесты | — |
 | 3 | JWT-аутентификация | — |
 | 4 | Пагинация и фильтрация API | — |
